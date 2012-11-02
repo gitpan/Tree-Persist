@@ -5,26 +5,35 @@ use warnings;
 
 use base qw( Tree::Persist::Base );
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
-sub _init {
-    my $class = shift;
-    my ($opts) = @_;
+# ----------------------------------------------
 
-    my $self = $class->SUPER::_init( $opts );
+sub _init
+{
+	my($class)      = shift;
+	my($opts)       = @_;
+	my($self)       = $class -> SUPER::_init( $opts );
+	$self->{_dbh}   = $opts->{dbh};
+	$self->{_table} = $opts->{table};
 
-    $self->{_dbh} = $opts->{dbh};
-    $self->{_table} = $opts->{table};
+	return $self;
 
-    return $self;
-}
+} # End of _init.
+
+# ----------------------------------------------
 
 1;
+
 __END__
 
 =head1 NAME
 
-Tree::Persist::DB - the base class for DB plugins for Tree persistence
+Tree::Persist::DB - The base class for DB plugins for Tree persistence
+
+=head1 SYNOPSIS
+
+See L<Tree::Persist/SYNOPSIS> or scripts/xml.demo.pl for sample code.
 
 =head1 DESCRIPTION
 
@@ -33,8 +42,10 @@ provides DB plugins for Tree persistence through L<Tree::Persist>.
 
 =head1 PARAMETERS
 
+Parameters are used in the call to L<Tree::Persist/connect({%opts})> or L<Tree::Persist/create_datastore({%opts})>.
+
 In addition to any parameters required by its parent L<Tree::Persist::Base>, the
-following parameters are required by connect():
+following parameters are used by C<connect()> or C<create_datastore()>:
 
 =over 4
 
@@ -52,6 +63,10 @@ with the appropriate user. This is required.
 This is the table name that contains the tree. This is required.
 
 =back
+
+=head1 METHODS
+
+Tree::Persist::DB is a sub-class of L<Tree::Persist::Base>, and inherits all its methods.
 
 =head1 TODO
 

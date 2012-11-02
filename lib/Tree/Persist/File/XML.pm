@@ -9,89 +9,111 @@ use Scalar::Util qw( blessed refaddr );
 use UNIVERSAL::require;
 use XML::Parser;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
-sub _reload {
-    my $self = shift;
+# ----------------------------------------------
 
-    my $linenum = 0;
-    my @stack;
-    my $tree;
-    my $parser = XML::Parser->new(
-        Handlers => {
-            Start => sub {
-                shift;
-                my ($name, %args) = @_;
+sub _reload
+{
+	my($self)    = shift;
+	my($linenum) = 0;
 
-                my $class = $args{class}
-                    ? $args{class}
-                    : $self->{_class};
-                $class->require or die $UNIVERSAL::require::ERROR;
+	my @stack;
+	my $tree;
 
-                my $node = $class->new( $args{value} );
+	my $parser = XML::Parser -> new
+	(
+		Handlers =>
+		{
+			Start => sub
+			{
+				my($dummy, $name, %args) = @_;
+				my($class)               = $args{class} ? $args{class} : $self->{_class};
 
-                if ( @stack ) {
-                    $stack[-1]->add_child( $node );
-                }
-                else {
-                    $tree = $node;
-                }
+				$class -> require or die $UNIVERSAL::require::ERROR;
 
-                push @stack, $node;
-            },
-            End => sub {
-                $linenum++;
-                pop @stack;
-            },
-        },
-    );
+				my($node) = $class->new( $args{value} );
 
-    $parser->parsefile( $self->{_filename} );
+				if ( @stack )
+				{
+					$stack[-1] -> add_child( $node );
+				}
+				else
+				{
+					$tree = $node;
+				}
 
-    $self->_set_tree( $tree );
+				push @stack, $node;
+			},
+			End => sub
+			{
+				$linenum++;
 
-    return $self;
-}
+				pop @stack;
+			},
+		},
+	);
+
+	$parser -> parsefile( $self->{_filename} );
+
+	$self -> _set_tree( $tree );
+
+	return $self;
+
+} # End of _reload.
+
+# ----------------------------------------------
 
 my $pad = ' ' x 4;
 
-sub _build_string {
-    my $self = shift;
-    my ($tree) = @_;
+# ----------------------------------------------
 
-    my $str = '';
+sub _build_string
+{
+	my($self)       = shift;
+	my($tree)       = @_;
+	my(%encode)     = ('<' => '&lt;', '>' => '&gt;', '&' => '&amp;', "'" => '&apos;', '"' => '&quot;');
+	my($str)        = '';
+	my($curr_depth) = $tree->depth;
 
-    my $curr_depth = $tree->depth;
-    my @closer;
-    foreach my $node ( $tree->traverse ) {
-        my $new_depth = $node->depth;
-        $str .= pop(@closer) while @closer && $curr_depth-- >= $new_depth;
+	my(@char, @closer);
+	my($new_depth);
 
-        $curr_depth = $new_depth;
-        $str .= ($pad x $curr_depth)
-                . '<node class="'
-                . blessed($node)
-                . '" value="'
-                #XXX Need to encode the value.
-                . $node->value
-                . '">' . $/;
-        push @closer, ($pad x $curr_depth) . "</node>\n";
-    }
-    $str .= pop(@closer) while @closer;
+	for my $node ( $tree->traverse )
+	{
+		$new_depth  = $node->depth;
+		$str        .= pop(@closer) while @closer && $curr_depth-- >= $new_depth;
+		$curr_depth = $new_depth;
+		@char       = map{$encode{$_} ? $encode{$_} : $_} split(//, $node -> value);
+		$str        .= ($pad x $curr_depth)
+					. '<node class="'
+					. blessed($node)
+					. '" value="'
+					. join('', @char)
+					. '">' . $/;
 
-    return $str;
-}
+		push @closer, ($pad x $curr_depth) . "</node>\n";
+	}
+
+	$str .= pop(@closer) while @closer;
+
+	return $str;
+
+} # End of _build_string.
+
+# ----------------------------------------------
 
 1;
+
 __END__
 
 =head1 NAME
 
-Tree::Persist::File::XML - a handler for Tree persistence
+Tree::Persist::File::XML - A handler for Tree persistence
 
 =head1 SYNOPSIS
 
-Please see L<Tree::Persist> for how to use this module.
+See L<Tree::Persist/SYNOPSIS> or scripts/xml.demo.pl for sample code.
 
 =head1 DESCRIPTION
 
@@ -100,8 +122,14 @@ file.
 
 =head1 PARAMETERS
 
-This class requires no additional parameters than are specified by its parent,
+Parameters are used in the call to L<Tree::Persist/connect({%opts})> or L<Tree::Persist/create_datastore({%opts})>.
+
+This class requires no additional parameters beyond those specified by its parent,
 L<Tree::Persist::File>.
+
+=head1 METHODS
+
+Tree::Persist::File::XML is a sub-class of L<Tree::Persist::File>, and inherits all its methods.
 
 =head1 XML SPEC
 
@@ -114,15 +142,15 @@ by the parent containing the child.
 NOTE: This plugin will currently only handle values that are strings or have a
 stringification method.
 
-=head1 TODO
+The 5 build-in XML character entities (within the node's I<value>) are encoded using this map:
 
-=over 4
+	my(%encode) = ('<' => '&lt;', '>' => '&gt;', '&' => '&amp;', "'" => '&apos;', '"' => '&quot;');
 
-=item *
+They are decoded when L<XML::Parser> reads the value back in.
 
-Currently, the value is not XML-encoded.
+See L<http://www.w3.org/standards/xml/core> for details.
 
-=back
+See also scripts/xml.demo.pl and scripts/store.xml.
 
 =head1 CODE COVERAGE
 
@@ -146,6 +174,6 @@ Copyright 2004, 2005 by Infinity Interactive, Inc.
 
 L<http://www.iinteractive.com>
 
-This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 =cut

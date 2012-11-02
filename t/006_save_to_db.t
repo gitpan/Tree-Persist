@@ -1,10 +1,31 @@
 use strict;
 use warnings;
 
+use File::Spec;
+use File::Temp;
+
 use Test::More;
+
+# ---------------------------------------------
 
 eval "use DBI";
 plan skip_all => "DBI required for testing DB plugin" if $@;
+
+# The EXLOCK option is for BSD-based systems.
+
+my($dir);
+my($file);
+
+if (! $ENV{DBI_DSN})
+{
+	eval "use DBD::SQLite";
+	plan skip_all => "DBD::SQLite required for testing DB plugin" if $@;
+
+	$dir           = File::Temp -> newdir('temp.XXXX', CLEANUP => 1, EXLOCK => 0, TMPDIR => 1);
+	$file          = File::Spec -> catfile($dir, 'test.sqlite');
+	$ENV{DBI_DSN}  = "dbi:SQLite:dbname=$file";
+	$ENV{DBI_USER} = $ENV{DBI_PASS} = '';
+}
 
 #use t::tests qw( %runs );
 
@@ -16,27 +37,24 @@ use_ok( $CLASS )
 
 use_ok( 'Tree' );
 
-my $dbh = DBI->connect(
-    'dbi:mysql:tree', 'tree', 'tree', {
-        AutoCommit => 1,
-        RaiseError => 1,
-        PrintError => 0,
-    },
-);
+# The EXLOCK option is for BSD-based systems.
+
+my(@opts) = ($ENV{DBI_DSN}, $ENV{DBI_USER}, $ENV{DBI_PASS});
+my $dbh   = DBI->connect(@opts, {RaiseError => 1, PrintError => 0, AutoCommit => 1});
 
 $dbh->do( <<"__END_SQL__" );
-CREATE TEMPORARY TABLE 006_tree (
+CREATE TEMPORARY TABLE tree_006 (
     id INT NOT NULL PRIMARY KEY
-   ,parent_id INT REFERENCES 006_tree (id)
+   ,parent_id INT REFERENCES tree_006 (id)
    ,value VARCHAR(255)
    ,class VARCHAR(255) NOT NULL
 )
 __END_SQL__
 
 $dbh->do( <<"__END_SQL__" );
-INSERT INTO 006_tree
+INSERT INTO tree_006
     ( id, parent_id, value, class )
-VALUES 
+VALUES
     ( 1, NULL, 'root', 'Tree' )
    ,( 2, NULL, 'root2', 'Tree' )
    ,( 3, 2, 'child', 'Tree' )
@@ -45,10 +63,10 @@ __END_SQL__
 sub get_values {
     my $dbh = shift;
     my ($table) = @_;
-    $table ||= '006_tree';
+    $table ||= 'tree_006';
 
-    if ( $table eq '006_tree' ) {
-        my $sth = $dbh->prepare_cached( "SELECT * FROM 006_tree WHERE id > 3 ORDER BY id" );
+    if ( $table eq 'tree_006' ) {
+        my $sth = $dbh->prepare_cached( "SELECT * FROM tree_006 WHERE id > 3 ORDER BY id" );
         $sth->execute;
         return $sth->fetchall_arrayref( {} );
     }
@@ -66,7 +84,7 @@ sub get_values {
         type  => 'DB',
         tree  => $tree,
         dbh   => $dbh,
-        table => '006_tree',
+        table => 'tree_006',
         class_col => 'class',
     });
 
@@ -79,7 +97,7 @@ sub get_values {
         "We got back what we put in.",
     );
 
-    $dbh->do( "DELETE FROM 006_tree WHERE id > 3" );
+    $dbh->do( "DELETE FROM tree_006 WHERE id > 3" );
 }
 
 {
@@ -95,7 +113,7 @@ sub get_values {
         type  => 'DB',
         tree  => $tree,
         dbh   => $dbh,
-        table => '006_tree',
+        table => 'tree_006',
         class_col => 'class',
     });
 
@@ -112,13 +130,13 @@ sub get_values {
         "We got back what we put in.",
     );
 
-    $dbh->do( "DELETE FROM 006_tree WHERE id > 3" );
+    $dbh->do( "DELETE FROM tree_006 WHERE id > 3" );
 }
 
 $dbh->do( <<"__END_SQL__" );
-CREATE TEMPORARY TABLE 006_tree_2 (
+CREATE TEMPORARY TABLE tree_006_2 (
     id INT NOT NULL PRIMARY KEY
-   ,parent_id INT REFERENCES 006_tree_2 (id)
+   ,parent_id INT REFERENCES tree_006_2 (id)
    ,value VARCHAR(255)
 )
 __END_SQL__
@@ -136,10 +154,10 @@ __END_SQL__
         type  => 'DB',
         tree  => $tree,
         dbh   => $dbh,
-        table => '006_tree_2',
+        table => 'tree_006_2',
     });
 
-    my $values = get_values( $dbh, '006_tree_2' );
+    my $values = get_values( $dbh, 'tree_006_2' );
     is_deeply(
         $values,
         [
@@ -152,5 +170,5 @@ __END_SQL__
         "We got back what we put in.",
     );
 
-    $dbh->do( "DELETE FROM 006_tree_2" );
+    $dbh->do( "DELETE FROM tree_006_2" );
 }

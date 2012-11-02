@@ -1,14 +1,9 @@
 ---
-name: Tree-Persist
-version: 1.00
-author: ~
-abstract: ~
-license: perl
-requires:
-  Scalar::Util: 1.10
-  Tree: 1.00
-  UNIVERSAL::require: 0.10
-  perl: 5.6.0
+abstract: 'A transparent persistence layer for Tree and its children'
+author:
+  - 'Rob Kinyon E<lt>rob.kinyon@iinteractive.comE<gt>'
+  - 'Stevan Little E<lt>stevan.little@iinteractive.comE<gt>'
+  - 'Co-maintenance since V 1.01 is by Ron Savage <rsavage@cpan.org>.'
 build_requires:
   File::Copy: 0.01
   File::Spec: 0.01
@@ -17,23 +12,39 @@ build_requires:
   Test::File::Cleaner: 0.02
   Test::File::Contents: 0.02
   Test::More: 0.47
+configure_requires:
+  Module::Build: 0.40
+dynamic_config: 1
+generated_by: 'Module::Build version 0.4003, CPAN::Meta::Converter version 2.120630'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Tree-Persist
 provides:
   Tree::Persist:
     file: lib/Tree/Persist.pm
-    version: 1.00
+    version: 1.01
   Tree::Persist::Base:
     file: lib/Tree/Persist/Base.pm
-    version: 1.00
+    version: 1.01
   Tree::Persist::DB:
     file: lib/Tree/Persist/DB.pm
-    version: 1.00
+    version: 1.01
   Tree::Persist::DB::SelfReferential:
     file: lib/Tree/Persist/DB/SelfReferential.pm
-    version: 1.00
+    version: 1.01
   Tree::Persist::File:
     file: lib/Tree/Persist/File.pm
-    version: 1.00
+    version: 1.01
   Tree::Persist::File::XML:
     file: lib/Tree/Persist/File/XML.pm
-    version: 1.00
-generated_by: Module::Build version 0.2701
+    version: 1.01
+requires:
+  Scalar::Util: 1.10
+  Tree: 1.00
+  UNIVERSAL::require: 0.10
+  perl: v5.6.0
+resources:
+  license: http://dev.perl.org/licenses/
+version: 1.01

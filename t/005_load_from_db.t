@@ -1,10 +1,31 @@
 use strict;
 use warnings;
 
+use File::Spec;
+use File::Temp;
+
 use Test::More;
+
+# ---------------------------------------------
 
 eval "use DBI";
 plan skip_all => "DBI required for testing DB plugin" if $@;
+
+# The EXLOCK option is for BSD-based systems.
+
+my($dir);
+my($file);
+
+if (! $ENV{DBI_DSN})
+{
+	eval "use DBD::SQLite";
+	plan skip_all => "DBD::SQLite required for testing DB plugin" if $@;
+
+	$dir           = File::Temp -> newdir('temp.XXXX', CLEANUP => 1, EXLOCK => 0, TMPDIR => 1);
+	$file          = File::Spec -> catfile($dir, 'test.sqlite');
+	$ENV{DBI_DSN}  = "dbi:SQLite:dbname=$file";
+	$ENV{DBI_USER} = $ENV{DBI_PASS} = '';
+}
 
 use t::tests qw( %runs );
 
@@ -14,27 +35,24 @@ my $CLASS = 'Tree::Persist';
 use_ok( $CLASS )
     or Test::More->builder->BAILOUT( "Cannot load $CLASS" );
 
-my $dbh = DBI->connect(
-    'dbi:mysql:tree', 'tree', 'tree', {
-        AutoCommit => 1,
-        RaiseError => 1,
-        PrintError => 0,
-    },
-);
+# The EXLOCK option is for BSD-based systems.
+
+my(@opts) = ($ENV{DBI_DSN}, $ENV{DBI_USER}, $ENV{DBI_PASS});
+my $dbh   = DBI->connect(@opts, {RaiseError => 1, PrintError => 0, AutoCommit => 1});
 
 $dbh->do( <<"__END_SQL__" );
-CREATE TEMPORARY TABLE 005_tree (
+CREATE TEMPORARY TABLE tree_005 (
     id INT NOT NULL PRIMARY KEY
-   ,parent_id INT REFERENCES 005_tree (id)
+   ,parent_id INT REFERENCES tree_005 (id)
    ,class VARCHAR(255) NOT NULL
    ,value VARCHAR(255)
 )
 __END_SQL__
 
 $dbh->do( <<"__END_SQL__" );
-INSERT INTO 005_tree
+INSERT INTO tree_005
     ( id, parent_id, value, class )
-VALUES 
+VALUES
     ( 1, NULL, 'root', 'Tree' )
    ,( 2, NULL, 'root2', 'Tree' )
    ,( 3, 2, 'child', 'Tree' )
@@ -44,7 +62,7 @@ __END_SQL__
     my $persist = $CLASS->connect({
         type  => 'DB',
         dbh   => $dbh,
-        table => '005_tree',
+        table => 'tree_005',
         id    => 1,
         class_col => 'class',
     });
@@ -63,7 +81,7 @@ __END_SQL__
     my $persist = $CLASS->connect({
         type  => 'DB',
         dbh   => $dbh,
-        table => '005_tree',
+        table => 'tree_005',
         id    => 2,
         class_col => 'class',
     });
@@ -86,18 +104,18 @@ __END_SQL__
 }
 
 $dbh->do( <<"__END_SQL__" );
-CREATE TEMPORARY TABLE 005_tree_2 (
+CREATE TEMPORARY TABLE tree_005_2 (
     some_id INT NOT NULL PRIMARY KEY
-   ,some_parent_id INT REFERENCES 005_tree (id)
+   ,some_parent_id INT REFERENCES tree_005 (id)
    ,some_class VARCHAR(255) NOT NULL
    ,some_value VARCHAR(255)
 )
 __END_SQL__
 
 $dbh->do( <<"__END_SQL__" );
-INSERT INTO 005_tree_2
+INSERT INTO tree_005_2
     ( some_id, some_parent_id, some_value, some_class )
-VALUES 
+VALUES
     ( 1, NULL, 'root', 'Tree' )
    ,( 2, NULL, 'root2', 'Tree' )
    ,( 3, 2, 'child', 'Tree' )
@@ -107,7 +125,7 @@ __END_SQL__
     my $persist = $CLASS->connect({
         type  => 'DB',
         dbh   => $dbh,
-        table => '005_tree_2',
+        table => 'tree_005_2',
         id    => 1,
         id_col => 'some_id',
         parent_id_col => 'some_parent_id',
@@ -129,7 +147,7 @@ __END_SQL__
     my $persist = $CLASS->connect({
         type  => 'DB',
         dbh   => $dbh,
-        table => '005_tree_2',
+        table => 'tree_005_2',
         id    => 2,
         id_col => 'some_id',
         parent_id_col => 'some_parent_id',

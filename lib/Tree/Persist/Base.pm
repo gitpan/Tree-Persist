@@ -6,182 +6,300 @@ use warnings;
 use Scalar::Util qw( blessed );
 use UNIVERSAL::require;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
-sub new {
-    my $class = shift;
+# ----------------------------------------------
 
-    my $self = bless {}, $class;
+sub new
+{
+	my($class) = shift;
+	my($self)  = bless {}, $class;
 
-    $self->_init( @_ );
+	$self -> _init( @_ );
 
-    return $self;
-}
+	return $self;
 
-sub _init {
-    my $self = shift;
-    my ($opts) = @_;
+} # End of new.
 
-    $self->{_tree} = undef;
-    $self->{_autocommit} = (exists $opts->{autocommit} ? $opts->{autocommit} : 1);
-    $self->{_changes} = [];
+# ----------------------------------------------
 
-    if ( exists $opts->{class} ) {
-        $self->{_class} = $opts->{class};
-    }
-    else {
-        $self->{_class} = 'Tree';
-    }
+sub _init
+{
+	my($self) = shift;
+	my($opts) = @_;
 
-    if ( exists $opts->{tree} ) {
-        $self->_set_tree( $opts->{tree} );
-    }
+	$self->{_tree}       = undef;
+	$self->{_autocommit} = (exists $opts->{autocommit} ? $opts->{autocommit} : 1);
+	$self->{_changes}    = [];
 
-    return $self;
-}
+	if ( exists $opts->{class} )
+	{
+		$self->{_class} = $opts->{class};
+	}
+	else
+	{
+		$self->{_class} = 'Tree';
+	}
 
-sub autocommit {
-    my $self = shift;
+	if ( exists $opts->{tree} )
+	{
+		$self -> _set_tree( $opts->{tree} );
+	}
 
-    if ( @_ ) {
-        (my $old, $self->{_autocommit}) = ($self->{_autocommit}, (shift && 1) );
-        return $old;
-    }
-    else {
-        return $self->{_autocommit};
-    }
-}
+	return $self;
 
-sub rollback {
-    my $self = shift;
+} # End of _init.
 
-    if ( @{$self->{_changes}} ) {
-        $self->_reload;
-        $self->{_changes} = [];
-    }
+# ----------------------------------------------
 
-    return $self;
-}
+sub autocommit
+{
+	my($self) = shift;
 
-sub commit {
-    my $self = shift;
+	if ( @_ )
+	{
+		(my $old, $self->{_autocommit}) = ($self->{_autocommit}, (shift && 1) );
 
-    if ( @{$self->{_changes}} ) {
-        $self->_commit;
-        $self->{_changes} = [];
-    }
+		return $old;
+	}
+	else
+	{
+		return $self->{_autocommit};
+	}
 
-    return $self;
-}
+} # End of autocommit.
 
-sub tree {
-    my $self = shift;
-    return $self->{_tree};
-}
+# ----------------------------------------------
 
-sub _set_tree {
-    my $self = shift;
-    my ($value) = @_;
+sub rollback
+{
+	my($self) = shift;
 
-    $self->{_tree} = $value;
+	if ( @{$self->{_changes} } )
+	{
+		$self -> _reload;
 
-    $self->_install_handlers;
+		$self->{_changes} = [];
+	}
 
-    return $self;
-}
+	return $self;
 
-sub _install_handlers {
-    my $self = shift;
+} # End of rollback.
 
-    $self->{_tree}->add_event_handler({
-        add_child    => $self->_add_child_handler,
-        remove_child => $self->_remove_child_handler,
-        value        => $self->_value_handler,
-    });
+# ----------------------------------------------
 
-    return $self;
-}
+sub commit
+{
+	my($self) = shift;
 
-sub _add_child_handler {
-    my $self = shift;
-    return sub {
-        my ($parent, @children) = @_;
-        push @{$self->{_changes}}, {
-            action => 'add_child',
-            parent => $parent,
-            children => [ @children ],
-        };
-        $self->commit if $self->autocommit;
-    };
-}
+	if ( @{$self->{_changes} } )
+	{
+		$self -> _commit;
 
-sub _remove_child_handler {
-    my $self = shift;
-    return sub {
-        my ($parent, @children) = @_;
-        push @{$self->{_changes}}, {
-            action => 'remove_child',
-            parent => $parent,
-            children => [ @children ],
-        };
-        $self->commit if $self->autocommit;
-    };
-}
+		$self->{_changes} = [];
+	}
 
-sub _value_handler {
-    my $self = shift;
-    return sub {
-        my ($node, $old, $new) = @_;
-        push @{$self->{_changes}}, {
-            action => 'change_value',
-            node => $node,
-            old_value => $old,
-            new_value => $node->value,
-        };
-        $self->commit if $self->autocommit;
-    };
-}
+	return $self;
+
+} # End of commit.
+
+# ----------------------------------------------
+
+sub tree
+{
+	my($self) = shift;
+
+	return $self->{_tree};
+
+} # End of tree.
+
+# ----------------------------------------------
+
+sub _set_tree
+{
+	my($self)  = shift;
+	my($value) = @_;
+
+	$self->{_tree} = $value;
+
+	$self->_install_handlers;
+
+	return $self;
+
+} # End of _set_tree.
+
+# ----------------------------------------------
+
+sub _install_handlers
+{
+	my($self) = shift;
+
+	$self->{_tree} -> add_event_handler
+	({
+		add_child	 => $self -> _add_child_handler,
+		remove_child => $self -> _remove_child_handler,
+		value		 => $self -> _value_handler,
+	});
+
+	return $self;
+
+} # End of _install_handlers.
+
+# ----------------------------------------------
+
+sub _strip_options
+{
+	my($self)   = shift;
+	my($params) = @_;
+
+	if ( @$params && ! blessed($params->[0]) && ref($params->[0]) eq 'HASH' )
+	{
+		return shift @$params;
+	}
+	else
+	{
+		return {};
+	}
+
+} # End of _strip_options.
+
+# ----------------------------------------------
+
+sub _add_child_handler
+{
+	my($self) = shift;
+
+	return sub
+	{
+		my($parent, @children) = @_;
+		my($options)           = $self -> _strip_options( \@children );
+
+		push @{$self->{_changes} },
+		{
+			action   => 'add_child',
+			children => [ @children ],
+			options  => $options,
+			parent   => $parent,
+		};
+
+		$self -> commit if ($self -> autocommit);
+	};
+
+} # End of _add_child_handler.
+
+# ----------------------------------------------
+
+sub _remove_child_handler
+{
+	my($self) = shift;
+
+	return sub
+	{
+		my($parent, @children) = @_;
+		my($options)           = $self -> _strip_options( \@children );
+
+		push @{$self->{_changes} },
+		{
+			action   => 'remove_child',
+			children => [ @children ],
+			options  => $options,
+			parent   => $parent,
+		};
+
+		$self -> commit if ($self -> autocommit);
+	};
+
+} # End of _remove_child_handler.
+
+# ----------------------------------------------
+
+sub _value_handler
+{
+	my($self) = shift;
+
+	return sub
+	{
+		my($node, $old, $new) = @_;
+
+		push @{$self->{_changes} },
+		{
+			action    => 'change_value',
+			new_value => $node->value,
+			node      => $node,
+			old_value => $old,
+		};
+
+		$self -> commit if ($self -> autocommit);
+	};
+
+} # End of _value_handler.
+
+# ----------------------------------------------
 
 1;
+
 __END__
 
 =head1 NAME
 
 Tree::Persist::Base - The base class for the Tree persistence plugin hierarchy
 
+=head1 SYNOPSIS
+
+See L<Tree::Persist/SYNOPSIS> or scripts/xml.demo.pl for sample code.
+
 =head1 DESCRIPTION
 
 This provides a useful baseclass for all the L<Tree::Persist> plugins.
 
+Existing plugins are:
+
+=over 4
+
+=item * L<Tree::Persist::DB::SelfReferential>
+
+=item * L<Tree::Persist::File::XML>
+
+=back
+
 =head1 PARAMETERS
 
+Parameters are used in the call to L<Tree::Persist/connect({%opts})> or L<Tree::Persist/create_datastore({%opts})>.
+
 These are the parameters provided for by this class. These are in addition to
-whatever parameters the child class may use.
+whatever parameters sub-classes may use.
 
 =over 4
 
 =item * autocommit (optional)
 
 This will be the initial setting for the autocommit value. (Please see
-C<autocommit()> for more info.)
+L</autocommit([$autocommit])> for more info.)
 
 =item * class (optional)
 
 This is the class that will be used to bless the nodes into, unless the
 datastore specifies otherwise. It will default to 'Tree'.
 
+=item * tree (required when calling create_datastore(), not used when calling connect() )
+
+This is the object of type L<Tree> which is the root of the tree to write to the store.
+
 =back
 
 =head1 METHODS
 
-=over 4
+=head2 new({%opts})
 
-=item * new({ %opts })
+This is the constructor. C<%opts> is the set of parameters as described above.
+Sub-classes may add their own optional or mandatory parameters.
 
-This is the constructor. C<%opts> is the set of parameters described in
-L<Tree::Persist>.
+End-user code never calls new(). You always call L<Tree::Persist/connect({%opts})>
+or L<Tree::Persist/create_datastore({%opts})>
 
-=item * autocommit( [$autocommit] )
+=head2 autocommit([$autocommit])
+
+Here, [] indicate an optional parameter.
 
 If called without any parameters, this will return the current autocommit
 setting. If called with a parameter, it will set the autocommit flag to the
@@ -194,27 +312,25 @@ NOTE: If you turn autocommit off, then back on, it will B<not> issue a commit
 until the next change occurs. At that time, it will commit all changes that
 have occurred since the last commit.
 
-=item * commit()
+=head2 commit()
 
 If any changes are queued up, this will write them to the database. If there
 are no changes, this is a no-op.
 
-=item * rollback
+=head2 rollback()
 
 If there are any changes queued up, this will discard those changes and reload
 the tree from the datastore. If there are no changes, this is a no-op.
 
-=item * tree
+=head2 tree()
 
 This will return the tree that is being persisted.
-
-=back
 
 =head1 CODE COVERAGE
 
 Please see the relevant section of L<Tree::Persist>.
 
-=head1 SUPPORSUPPORT
+=head1 SUPPORT
 
 Please see the relevant section of L<Tree::Persist>.
 
@@ -232,6 +348,6 @@ Copyright 2004, 2005 by Infinity Interactive, Inc.
 
 L<http://www.iinteractive.com>
 
-This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 =cut

@@ -8,250 +8,284 @@ use base qw( Tree::Persist::DB );
 use Scalar::Util qw( blessed refaddr );
 use UNIVERSAL::require;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
-my %defaults = (
-    id_col        => 'id',
-    parent_id_col => 'parent_id',
-    value_col     => 'value',
-#    class_col     => 'class',
+my(%defaults) =
+(
+	id_col        => 'id',
+	parent_id_col => 'parent_id',
+	value_col     => 'value',
+#	class_col     => 'class',
 );
 
-sub _init {
-    my $class = shift;
-    my ($opts) = @_;
+# ----------------------------------------------
 
-    my $self = $class->SUPER::_init( $opts );
+sub _init
+{
+	my($class)   = shift;
+	my($opts)    = @_;
+	my($self)    = $class -> SUPER::_init( $opts );
+	$self->{_id} = $opts->{id};
 
-    $self->{_id} = $opts->{id};
+	while ( my ($name, $val) = each %defaults )
+	{
+		$self->{ "_${name}" } = $opts->{ $name } ? $opts->{ $name } : $val;
+	}
 
-    while ( my ($name, $val) = each %defaults ) {
-        $self->{ "_${name}" } = $opts->{ $name }
-            ? $opts->{ $name }
-            : $val;
-    }
+	if ( exists $opts->{class_col} )
+	{
+		$self->{_class_col} = $opts->{class_col};
+	}
 
-    if ( exists $opts->{class_col} ) {
-        $self->{_class_col} = $opts->{class_col};
-    }
+	return $self;
 
-    return $self;
-}
+} # End of _init.
 
-sub _reload {
-    my $self = shift;
+# ----------------------------------------------
 
-    my %sql = $self->_build_sql;
+sub _reload
+{
+	my($self) = shift;
+	my(%sql)  = $self->_build_sql;
+	my($sth)  = $self->{_dbh} -> prepare( $sql{ fetch } );
 
-    my $sth = $self->{_dbh}->prepare( $sql{ fetch } );
-    $sth->execute( $self->{_id} );
+	$sth -> execute( $self->{_id} );
 
-    my ($id, $parent_id, $value, $class) = $sth->fetchrow_array();
+	my ($id, $parent_id, $value, $class) = $sth -> fetchrow_array();
 
-    $sth->finish;
+	$sth -> finish;
 
-    $class->require or die $UNIVERSAL::require::ERROR;
-    my $tree = $class->new( $value );
+	$class->require or die $UNIVERSAL::require::ERROR;
 
-    my $ref_addr = refaddr $self;
+	my($tree)     = $class -> new( $value );
+	my($ref_addr) = refaddr $self;
 
-    $tree->meta->{$ref_addr}{id} = $id;
-    $tree->meta->{$ref_addr}{parent_id} = $parent_id;
+	$tree->meta->{$ref_addr}{id}        = $id;
+	$tree->meta->{$ref_addr}{parent_id} = $parent_id;
 
-    my @parents = ( $tree );
-    while ( my $parent = shift @parents ) {
-        my $sth_child = $self->{_dbh}->prepare( $sql{ fetch_children } );
-        $sth_child->execute( $parent->meta->{$ref_addr}{id} );
+	my(@parents) = ( $tree );
 
-        $sth_child->bind_columns( \my ($id, $value, $class) );
+	my($node);
+	my($sth_child);
 
-        while ($sth_child->fetch) {
-            $class->require or die $UNIVERSAL::require::ERROR;
-            my $node = $class->new( $value );
-            $parent->add_child( $node );
-            $node->meta->{$ref_addr}{id} = $id;
-            $node->meta->{$ref_addr}{parent_id} = $parent_id;
+	while ( my $parent = shift @parents )
+	{
+		$sth_child = $self->{_dbh} -> prepare( $sql{ fetch_children } );
 
-            push @parents, $node;
-        }
+		$sth_child -> execute( $parent -> meta->{$ref_addr}{id} );
 
-        $sth_child->finish;
-    }
+		$sth_child -> bind_columns( \my ($id, $value, $class) );
 
-    $self->_set_tree( $tree );
+		while ($sth_child -> fetch)
+		{
+			$class->require or die $UNIVERSAL::require::ERROR;
 
-    return $self;
-}
+			$node = $class -> new( $value );
 
-sub _create {
-    my $self = shift;
-    my $tree = shift;
-    $tree = $self->tree unless $tree;
+			$parent -> add_child( $node );
 
-    my $dbh = $self->{_dbh};
-    my %sql = $self->_build_sql;
+			$node->meta->{$ref_addr}{id}        = $id;
+			$node->meta->{$ref_addr}{parent_id} = $parent_id;
 
-    my ($next_id) = do {
-        my $sth = $dbh->prepare( $sql{next_id} );
-        $sth->execute;
-        $sth->fetchrow_array;
-    };
+			push @parents, $node;
+		}
 
-    my $ref_addr = refaddr $self;
+		$sth_child -> finish;
+	}
 
-    my $sth = $dbh->prepare( $sql{create_node} );
+	$self -> _set_tree( $tree );
 
-    my $traversal = $tree->traverse( $tree->LEVEL_ORDER );
-    while ( my $node = $traversal->() ) {
-        my $node_id
-            = $node->meta->{$ref_addr}{id}
-            = $next_id++;
+	return $self;
 
-        my $parent_id
-            = $node->meta->{$ref_addr}{parent_id}
-            = eval { $node->parent->meta->{$ref_addr}{id} };
+} # End of _reload.
 
-        if ( $self->{_class_col} ) {
-            $sth->execute(
-                $node_id, $parent_id, $node->value, blessed( $node ),
-            );
-        }
-        else {
-            $sth->execute(
-                $node_id, $parent_id, $node->value,
-            );
-        }
-    }
+# ----------------------------------------------
 
-    $sth->finish;
+sub _create
+{
+	my($self)    = shift;
+	my($tree)    = shift;
+	$tree        = $self -> tree if (! $tree);
+	my($dbh)     = $self->{_dbh};
+	my(%sql)     = $self->_build_sql;
+	my($next_id) = do
+	{
+		my($sth) = $dbh->prepare( $sql{next_id} );
 
-    return $self;
-}
+		$sth->execute;
+		$sth->fetchrow_array;
+	};
+	my($ref_addr) = refaddr $self;
+	my($sth)      = $dbh->prepare( $sql{create_node} );
+	my $traversal = $tree -> traverse( $tree -> LEVEL_ORDER );
 
-sub _commit {
-    my $self = shift;
+	my($node_id);
+	my($parent_id);
 
-    my $dbh = $self->{_dbh};
-    my %sql = $self->_build_sql;
+	while ( my $node = $traversal->() )
+	{
+		$node_id
+			= $node -> meta->{$ref_addr}{id}
+			= $next_id++;
 
-    my $ref_addr = refaddr $self;
+		$parent_id
+			= $node -> meta->{$ref_addr}{parent_id}
+			= eval { $node -> parent -> meta->{$ref_addr}{id} };
 
-    foreach my $change ( @{$self->{_changes}} ) {
-        if ( $change->{action} eq 'change_value' ) {
-            my $sth = $dbh->prepare_cached( $sql{set_value} );
-            $sth->execute(
-                $change->{new_value},
-                $change->{node}->meta->{$ref_addr}{id},
-            );
-            $sth->finish;
-        }
-        elsif ( $change->{action} eq 'add_child' ) {
-            foreach my $child ( @{$change->{children}} ) {
-                $self->_create( $child );
-            }
-        }
-        elsif ( $change->{action} eq 'remove_child' ) {
-            foreach my $child ( @{$change->{children}} ) {
-                my $sth = $dbh->prepare_cached( $sql{set_parent} );
-                $sth->execute(
-                    undef,
-                    $child->meta->{$ref_addr}{id},
-                );
-                $sth->finish;
-            }
-        }
-    }
+		if ( $self->{_class_col} )
+		{
+			$sth->execute($node_id, $parent_id, $node->value, blessed( $node ) );
+		}
+		else {
+			$sth->execute($node_id, $parent_id, $node->value);
+		}
+	}
 
-    return $self;
-}
+	$sth -> finish;
 
-sub _build_sql {
-    my $self = shift;
+	return $self;
 
-    my %sql = (
-        next_id => <<"__END_SQL__",
+} # End of _create.
+
+# ----------------------------------------------
+
+sub _commit
+{
+	my($self)     = shift;
+	my($dbh)      = $self->{_dbh};
+	my(%sql)      = $self -> _build_sql;
+	my($ref_addr) = refaddr $self;
+
+	my($sth);
+
+	for my $change ( @{$self->{_changes}} )
+	{
+		if ( $change->{action} eq 'change_value' )
+		{
+			$sth = $dbh->prepare_cached( $sql{set_value} );
+
+			$sth -> execute($change->{new_value}, $change->{node}->meta->{$ref_addr}{id});
+			$sth -> finish;
+		}
+		elsif ( $change->{action} eq 'add_child' )
+		{
+			for my $child ( @{$change->{children}} )
+			{
+				$self -> _create( $child );
+			}
+		}
+		elsif ( $change->{action} eq 'remove_child' )
+		{
+			for my $child ( @{$change->{children}} )
+			{
+				$sth = $dbh -> prepare_cached( $sql{set_parent} );
+
+				$sth -> execute(undef, $child -> meta->{$ref_addr}{id});
+				$sth -> finish;
+			}
+		}
+	}
+
+	return $self;
+
+} # End of _commit.
+
+# ----------------------------------------------
+
+sub _build_sql
+{
+	my($self) = shift;
+	my(%sql)  =
+	(
+		next_id => <<"__END_SQL__",
 SELECT IFNULL(MAX($self->{_id_col}),0) + 1
   FROM $self->{_table}
 __END_SQL__
-        set_value => <<"__END_SQL__",
+		set_value => <<"__END_SQL__",
 UPDATE $self->{_table}
    SET $self->{_value_col} = ?
  WHERE $self->{_id_col} = ?
 __END_SQL__
-        set_parent => <<"__END_SQL__",
+		set_parent => <<"__END_SQL__",
 UPDATE $self->{_table}
    SET $self->{_parent_id_col} = ?
  WHERE $self->{_id_col} = ?
 __END_SQL__
-    );
+	);
 
-    if ( $self->{_class_col} ) {
-        $sql{fetch} = <<"__END_SQL__";
-SELECT $self->{_id_col}        AS id
-      ,$self->{_parent_id_col} AS parent_id
-      ,$self->{_value_col}     AS value
-      ,$self->{_class_col}     AS class
+	if ( $self->{_class_col} )
+	{
+		$sql{fetch} = <<"__END_SQL__";
+SELECT $self->{_id_col}		AS id
+	  ,$self->{_parent_id_col} AS parent_id
+	  ,$self->{_value_col}	 AS value
+	  ,$self->{_class_col}	 AS class
   FROM $self->{_table} AS tree
  WHERE tree.$self->{_id_col} = ?
 __END_SQL__
 
-        $sql{fetch_children} = <<"__END_SQL__";
-SELECT $self->{_id_col}        AS id
-      ,$self->{_value_col}     AS value
-      ,$self->{_class_col}     AS class
+		$sql{fetch_children} = <<"__END_SQL__";
+SELECT $self->{_id_col}		AS id
+	  ,$self->{_value_col}	 AS value
+	  ,$self->{_class_col}	 AS class
   FROM $self->{_table} AS tree
  WHERE tree.$self->{_parent_id_col} = ?
 __END_SQL__
 
-        $sql{create_node} = <<"__END_SQL__";
+		$sql{create_node} = <<"__END_SQL__";
 INSERT INTO $self->{_table} (
-    $self->{_id_col}
+	$self->{_id_col}
    ,$self->{_parent_id_col}
    ,$self->{_value_col}
    ,$self->{_class_col}
 ) VALUES ( ?, ?, ?, ? )
 __END_SQL__
-    }
-    else {
-        $sql{fetch} = <<"__END_SQL__";
-SELECT $self->{_id_col}        AS id
-      ,$self->{_parent_id_col} AS parent_id
-      ,$self->{_value_col}     AS value
-      ,'$self->{_class}'       AS class
+	}
+	else
+	{
+		$sql{fetch} = <<"__END_SQL__";
+SELECT $self->{_id_col}		AS id
+	  ,$self->{_parent_id_col} AS parent_id
+	  ,$self->{_value_col}	 AS value
+	  ,'$self->{_class}'	   AS class
   FROM $self->{_table} AS tree
  WHERE tree.$self->{_id_col} = ?
 __END_SQL__
 
-        $sql{fetch_children} = <<"__END_SQL__";
-SELECT $self->{_id_col}        AS id
-      ,$self->{_value_col}     AS value
-      ,'$self->{_class}'       AS class
+		$sql{fetch_children} = <<"__END_SQL__";
+SELECT $self->{_id_col}		AS id
+	  ,$self->{_value_col}	 AS value
+	  ,'$self->{_class}'	   AS class
   FROM $self->{_table} AS tree
  WHERE tree.$self->{_parent_id_col} = ?
 __END_SQL__
 
-        $sql{create_node} = <<"__END_SQL__";
+		$sql{create_node} = <<"__END_SQL__";
 INSERT INTO $self->{_table} (
-    $self->{_id_col}
+	$self->{_id_col}
    ,$self->{_parent_id_col}
    ,$self->{_value_col}
 ) VALUES ( ?, ?, ? )
 __END_SQL__
-    }
+	}
 
-    return %sql;
-}
+	return %sql;
+
+} # End of _build_sq.
+
+# ----------------------------------------------
 
 1;
+
 __END__
 
 =head1 NAME
 
-Tree::Persist::DB::SelfReferential - a handler for Tree persistence
+Tree::Persist::DB::SelfReferential - A handler for Tree persistence
 
 =head1 SYNOPSIS
 
-Please see L<Tree::Persist> for how to use this module.
+See L<Tree::Persist/SYNOPSIS> or scripts/xml.demo.pl for sample code.
 
 =head1 DESCRIPTION
 
@@ -265,8 +299,10 @@ has performance penalties.
 
 =head1 PARAMETERS
 
+Parameters are used in the call to L<Tree::Persist/connect({%opts})> or L<Tree::Persist/create_datastore({%opts})>.
+
 In addition to any parameters required by its parent L<Tree::Persist::DB>, the following
-parameters are required by connect():
+parameters are used by C<connect()> or C<create_datastore()>:
 
 =over 4
 
@@ -289,18 +325,17 @@ This is the column name for the value field. It defaults to "value".
 
 =item * class_col (optional)
 
-This is the column name for the class field. If unset, the class parameter
-will be used.
+This is the column name for the class field.
 
 =back
+
+=head1 Methods
+
+Tree::Persist::DB::SelfReferential is a sub-class of L<Tree::Persist::DB>, and inherits all its methods.
 
 =head1 TODO
 
 =over 4
-
-=item *
-
-To date, only MySQL has been tested.
 
 =item *
 
@@ -331,6 +366,6 @@ Copyright 2004, 2005 by Infinity Interactive, Inc.
 
 L<http://www.iinteractive.com>
 
-This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself. 
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 =cut
