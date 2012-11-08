@@ -1,5 +1,11 @@
 Revision history for Perl distribution Tree::Persist
 
+1.02  Thu Nov  8 12:38:00 2012
+	- No code changes.
+	- For pre-reqs such as strict, warnings, etc, which ship with Perl, set the version # to 0.
+		Reported as RT#80663 by Father Chrysostomos for Tree::DAG_Node.
+	- Add README.
+
 1.01  Thu Oct  4 10:27:00 2012
 	- Ron Savage is now co-maint.
 	- Re-write MySQL-specific code, which is only used in the tests.
