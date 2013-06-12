@@ -3,7 +3,9 @@ package Tree::Persist;
 use strict;
 use warnings;
 
-our $VERSION = '1.02';
+use Module::Runtime;
+
+our $VERSION = '1.03';
 
 # ----------------------------------------------
 
@@ -35,20 +37,18 @@ sub create_datastore
 
 sub _instantiate
 {
-	my($class) = shift;
+	my($self) = shift;
 	my($opts)  = @_;
-	my($type)  = delete $opts->{type};
-	$type      = 'File' if (! $type);
+	my($class) = delete $$opts{class};
+	my($type)  = delete $$opts{type};
 
-	use Tree::Persist::File::XML;
-	use Tree::Persist::DB::SelfReferential;
+	if (! $class)
+	{
+		$type  = 'File' if (! $type);
+		$class = $type eq 'File' ? 'Tree::Persist::File::XML' : 'Tree::Persist::DB::SelfReferential';
+	}
 
-	my($obj) =
-		$type eq 'File' ? Tree::Persist::File::XML->new( $opts ) :
-		$type eq 'DB'   ? Tree::Persist::DB::SelfReferential->new( $opts ) :
-		die "Unknown type '$type'";
-
-	return $obj;
+	return Module::Runtime::use_module($class)->new( $opts );
 
 } # End of _instantiate.
 
@@ -83,9 +83,9 @@ Create a datastore, which includes writing the tree:
 
 	my($writer) = Tree::Persist -> create_datastore
 	({
-		filename => 'scripts/store.xml',
-		tree	 => $tree_1,
-		type	 => 'File',
+		filename => 't/datafiles/store.xml',
+		tree     => $tree_1,
+		type     => 'File',
 	});
 
 Retrieve the tree:
@@ -93,12 +93,29 @@ Retrieve the tree:
 	my($reader) = Tree::Persist -> connect
 	({
 		filename => 'scripts/store.xml',
-		type	 => 'File',
+		type     => 'File',
 	});
 
 	my($tree_2) = $reader -> tree;
 
-See scripts/xml.demo.pl and its storage file scripts/store.xml. See also t/008_add_from_db.t.
+Or, with a user-specified class name for deflation and inflation:
+
+	my($writer) = Tree::Persist -> create_datastore
+	({
+		class    => 'Tree::Persist::File::XMLWithSingleQuotes',
+		filename => 't/datafiles/store.xml',
+		tree     => $tree_1,
+	});
+
+	my($reader) = Tree::Persist -> connect
+	({
+		class    => 'Tree::Persist::File::XMLWithSingleQuotes',
+		filename => 'scripts/store.xml',
+	});
+
+	my($tree_2) = $reader -> tree;
+
+See t/load_from_file.t and t/save_and_load.t for sample code.
 
 General usage of methods:
 
@@ -108,11 +125,11 @@ General usage of methods:
 
 =head1 DESCRIPTION
 
-This is a transparent persistence layer for Tree and its children. It's fully
+This is a transparent persistence layer for Tree and its children. It is fully
 pluggable and will allow either loading, storing, and/or association with
 between a datastore and a tree.
 
-B<NOTE:> If you load a subtree, you will have access to the parent's id, but
+B<NOTE:> If you load a subtree, you will have access to the parent id, but
 the node will be considered the root for the tree you are working with.
 
 =head1 PLUGINS
@@ -124,6 +141,16 @@ The plugins that have been written are:
 =item * L<Tree::Persist::DB::SelfReferential>
 
 =item * L<Tree::Persist::File::XML>
+
+This module uses double-quotes around the values of tag attributes.
+
+=item * L<Tree::Persist::File::XMLWithSingleQuote>
+
+This module uses single-quotes around the values of tag attributes.
+
+It is included simply to demonstrate using a user-supplied class for deflation/inflation.
+
+See t/save_and_load.t for sample code.
 
 =back
 
@@ -146,7 +173,8 @@ object that inherits from Tree::Persist.
 This will create a new datastore for a tree. It will then return the object
 used to create that datastore, as if you had called L</connect({%opts})>.
 
-%opts is described in L<Tree::Persist::DB::SelfReferential/PARAMETERS> and L<Tree::Persist::File::XML/PARAMETERS>.
+%opts is described in L<Tree::Persist::DB::SelfReferential/PARAMETERS>, L<Tree::Persist::File::XML/PARAMETERS>
+and L<Tree::Persist::File::XMLWithSingleQuotes/PARAMETERS>.
 
 =head3 Behaviors
 
@@ -210,8 +238,7 @@ L<Devel::Cover> report on this module's V 0.99 test suite.
 
 =head1 SUPPORT
 
-The mailing list is at L<TreeCPAN@googlegroups.com>. I also read
-L<http://www.perlmonks.com> on a daily basis.
+Email Ron Savage at the address below.
 
 =head1 AUTHORS
 

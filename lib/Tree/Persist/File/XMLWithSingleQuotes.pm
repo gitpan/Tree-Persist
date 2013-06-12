@@ -1,4 +1,4 @@
-package Tree::Persist::File::XML;
+package Tree::Persist::File::XMLWithSingleQuotes;
 
 use strict;
 use warnings;
@@ -85,11 +85,11 @@ sub _build_string
 		$curr_depth = $new_depth;
 		@char       = map{$encode{$_} ? $encode{$_} : $_} split(//, $node -> value);
 		$str        .= ($pad x $curr_depth)
-					. '<node class="'
+					. "<node class='"
 					. blessed($node)
-					. '" value="'
+					. "' value='"
 					. join('', @char)
-					. '">' . $/;
+					. "'>" . $/;
 
 		push @closer, ($pad x $curr_depth) . "</node>\n";
 	}
@@ -108,7 +108,7 @@ __END__
 
 =head1 NAME
 
-Tree::Persist::File::XML - A handler for Tree persistence
+Tree::Persist::File::XMLWithSingleQuotes - A handler for Tree persistence
 
 =head1 SYNOPSIS
 
@@ -119,7 +119,7 @@ See L<Tree::Persist/SYNOPSIS> or scripts/xml.demo.pl for sample code.
 This module is a plugin for L<Tree::Persist> to store a L<Tree> to an XML
 file.
 
-This module uses double-quotes around the values of tag attributes.
+This module uses single-quotes around the values of tag attributes.
 
 =head1 PARAMETERS
 
@@ -140,13 +140,13 @@ If C<class> is not provided, C<type> is used, and defaults to 'File'. Then C<cla
 
 	$class = $type eq 'File' ? 'Tree::Persist::File::XML' : 'Tree::Persist::DB::SelfReferential';
 
-See t/*.t for sample code.
+See t/save_and_load.t for sample code.
 
 =back
 
 =head1 METHODS
 
-Tree::Persist::File::XML is a sub-class of L<Tree::Persist::File>, and inherits all its methods.
+Tree::Persist::File::XMLWithSingleQuotes is a sub-class of L<Tree::Persist::File>, and inherits all its methods.
 
 =head1 XML SPEC
 
@@ -167,7 +167,7 @@ They are decoded when L<XML::Parser> reads the value back in.
 
 See L<http://www.w3.org/standards/xml/core> for details.
 
-See also t/*.t for sample code.
+See t/save_and_load.t for sample code.
 
 =head1 CODE COVERAGE
 

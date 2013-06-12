@@ -5,7 +5,7 @@ use warnings;
 
 use base qw( Tree::Persist::Base );
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 # ----------------------------------------------
 
@@ -93,6 +93,9 @@ Rob Kinyon E<lt>rob.kinyon@iinteractive.comE<gt>
 Stevan Little E<lt>stevan.little@iinteractive.comE<gt>
 
 Thanks to Infinity Interactive for generously donating our time.
+
+Co-maintenance since V 1.01 is by Ron Savage <rsavage@cpan.org>.
+Uses of 'I' in previous versions is not me, but will be hereafter.
 
 =head1 COPYRIGHT AND LICENSE
 
